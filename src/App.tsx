@@ -35,6 +35,7 @@ type PlayersState = {
   data: Players;
   isLoading: boolean;
   isError: boolean;
+  isSearched: boolean;
 };
 
 interface PlayersFetchInitAction {
@@ -53,32 +54,36 @@ interface PlayersFetchFailureAction {
 type PlayersAction =| PlayersFetchInitAction | PlayersFetchSuccessAction | PlayersFetchFailureAction;
 
 const playersReducer = (state: PlayersState, action: PlayersAction) => {
+  console.log('in here');
   switch (action.type) {
     case "PLAYERS_FETCH_INIT" :
       return {
         ...state,
         isLoading: true,
-        isError: false
+        isError: false,
+        isSearched: true
       };
     case "PLAYERS_FETCH_SUCCESS" :
       return {
         ...state,
         isLoading: false,
         isError: false,
+        isSearched: true,
         data: action.payload
       };
     case "PLAYERS_FETCH_FAILURE" :
       return {
         ...state,
         isLoading: false,
-        isError: true
+        isError: true,
+        isSearched: true
       };
   }
 };
 
 function App() {
   const [searchTerm, setSearchTerm] = React.useState<string>('');
-  const [players, dispatchPlayers] = React.useReducer(playersReducer, {data: [],isLoading: false,isError: false});
+  const [players, dispatchPlayers] = React.useReducer(playersReducer, {data: [],isLoading: false,isError: false, isSearched: false});
 
 
   const searchTableColumns = [
@@ -127,8 +132,8 @@ function App() {
       <Table 
         list={players.data} 
         columns={searchTableColumns} 
-        tableKey='searchTable'>{
-        searchTerm.trim() == "" &&  ? 'Search Table to Begin Search' : 'No results found...'}
+        tableKey='searchTable'>
+          {!players.isSearched ? 'Search Table to Begin Search' : 'No results found...'}
       </Table>
     </div>
   );
