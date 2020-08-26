@@ -31,9 +31,55 @@ type Player = {
 
 type Players = Array<Player>;
 
+type PlayersState = {
+  data: Players;
+  isLoading: boolean;
+  isError: boolean;
+};
+
+interface PlayersFetchInitAction {
+  type: "PLAYERS_FETCH_INIT";
+}
+
+interface PlayersFetchSuccessAction {
+  type: "PLAYERS_FETCH_SUCCESS";
+  payload: Players;
+}
+
+interface PlayersFetchFailureAction {
+  type: "PLAYERS_FETCH_FAILURE";
+}
+
+type PlayersAction =| PlayersFetchInitAction | PlayersFetchSuccessAction | PlayersFetchFailureAction;
+
+const playersReducer = (state: PlayersState, action: PlayersAction) => {
+  switch (action.type) {
+    case "PLAYERS_FETCH_INIT" :
+      return {
+        ...state,
+        isLoading: true,
+        isError: false
+      };
+    case "PLAYERS_FETCH_SUCCESS" :
+      return {
+        ...state,
+        isLoading: false,
+        isError: false,
+        data: action.payload
+      };
+    case "PLAYERS_FETCH_FAILURE" :
+      return {
+        ...state,
+        isLoading: false,
+        isError: true
+      };
+  }
+};
+
 function App() {
-  const [players, setPlayers] = React.useState<Players>([]);
   const [searchTerm, setSearchTerm] = React.useState<string>('');
+  const [players, dispatchPlayers] = React.useReducer(playersReducer, {data: [],isLoading: false,isError: false});
+
 
   const searchTableColumns = [
     {field:'first_name', title: 'First Name'},
@@ -42,13 +88,15 @@ function App() {
   ];
 
   const handleFetchTeams = React.useCallback(async () => {
+    dispatchPlayers({ type: "PLAYERS_FETCH_INIT" });
+
     try {
       const results = await axios.get(`${TEAM_API}${searchTerm}`);
-      setPlayers(results.data.data);
+      dispatchPlayers({ type: "PLAYERS_FETCH_SUCCESS", payload:results.data.data });
     } catch {
-      throw new Error();
+      dispatchPlayers({ type: "PLAYERS_FETCH_FAILURE" });
     }
-  }, [searchTerm,setPlayers]);
+  }, [searchTerm]);
 
   const handleSearchInput = React.useCallback(
     (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -57,7 +105,7 @@ function App() {
     [setSearchTerm]
   );
 
-  players.forEach(player => player.team_name = player.team.full_name);
+  players.data.forEach(player => player.team_name = player.team.full_name);
 
   const onSearchSubmit = (event: React.ChangeEvent<HTMLFormElement>) => {
     handleFetchTeams();
@@ -77,9 +125,11 @@ function App() {
         placeholder="First or Last name"
       ></SearchForm>
       <Table 
-        list={players} 
+        list={players.data} 
         columns={searchTableColumns} 
-        tableKey='searchTable'>{searchTerm.trim() == "" ? 'Search Table to Begin Search' : 'No results found...'}</Table>
+        tableKey='searchTable'>{
+        searchTerm.trim() == "" &&  ? 'Search Table to Begin Search' : 'No results found...'}
+      </Table>
     </div>
   );
 }
