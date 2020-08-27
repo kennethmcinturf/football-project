@@ -4,8 +4,10 @@ import React from 'react';
 import axios from "axios";
 import Table from './Table/Table';
 import SearchForm from './SearchForm/SearchForm';
+import Button from 'react-bootstrap/Button';
 
 const TEAM_API = 'https://www.balldontlie.io/api/v1/players?search=';
+const API_PAGE = '&page='
 
 type Team = {
   id: number;
@@ -32,7 +34,11 @@ type Player = {
 type Players = Array<Player>;
 
 type PlayersState = {
-  data: Players;
+  data: {
+    list: Players;
+    total_pages: number;
+    page: number;
+  };
   isLoading: boolean;
   isError: boolean;
   isSearched: boolean;
@@ -44,7 +50,11 @@ interface PlayersFetchInitAction {
 
 interface PlayersFetchSuccessAction {
   type: "PLAYERS_FETCH_SUCCESS";
-  payload: Players;
+  payload: {
+    list: Players;
+    total_pages: number;
+    page: number;
+  };
 }
 
 interface PlayersFetchFailureAction {
@@ -54,7 +64,6 @@ interface PlayersFetchFailureAction {
 type PlayersAction =| PlayersFetchInitAction | PlayersFetchSuccessAction | PlayersFetchFailureAction;
 
 const playersReducer = (state: PlayersState, action: PlayersAction) => {
-  console.log('in here');
   switch (action.type) {
     case "PLAYERS_FETCH_INIT" :
       return {
@@ -69,7 +78,11 @@ const playersReducer = (state: PlayersState, action: PlayersAction) => {
         isLoading: false,
         isError: false,
         isSearched: true,
-        data: action.payload
+        data: {
+          list: action.payload.page === 1 ?  action.payload.list : state.data.list.concat(action.payload.list),
+          total_pages: action.payload.total_pages,
+          page: action.payload.page
+        }
       };
     case "PLAYERS_FETCH_FAILURE" :
       return {
@@ -83,8 +96,13 @@ const playersReducer = (state: PlayersState, action: PlayersAction) => {
 
 function App() {
   const [searchTerm, setSearchTerm] = React.useState<string>('');
-  const [players, dispatchPlayers] = React.useReducer(playersReducer, {data: [],isLoading: false,isError: false, isSearched: false});
-
+  const [players, dispatchPlayers] = React.useReducer(playersReducer, 
+    {data: {
+      list: [],
+      total_pages: 0,
+      page: 1
+    }, isLoading: false, isError: false, isSearched: false}
+  );
 
   const searchTableColumns = [
     {field:'first_name', title: 'First Name'},
@@ -92,29 +110,46 @@ function App() {
     {field:'team_name', title: 'Team'},
   ];
 
+  const buildUrl = () => {
+    var url = `${TEAM_API}${searchTerm}${API_PAGE}${players.data.page}`;
+
+    return url;
+  }
+
   const handleFetchTeams = React.useCallback(async () => {
     dispatchPlayers({ type: "PLAYERS_FETCH_INIT" });
 
     try {
-      const results = await axios.get(`${TEAM_API}${searchTerm}`);
-      dispatchPlayers({ type: "PLAYERS_FETCH_SUCCESS", payload:results.data.data });
+      const results = await axios.get(buildUrl());
+      dispatchPlayers({
+        type: "PLAYERS_FETCH_SUCCESS", 
+        payload: {
+          list: results.data.data,
+          total_pages: results.data.meta.total_pages,
+          page: players.data.page
+        }, 
+      });
     } catch {
       dispatchPlayers({ type: "PLAYERS_FETCH_FAILURE" });
     }
-  }, [searchTerm]);
+  }, [players, buildUrl]);
 
   const handleSearchInput = React.useCallback(
     (event: React.ChangeEvent<HTMLInputElement>) => {
       setSearchTerm(event.target.value);
-    },
-    [setSearchTerm]
-  );
+  },[setSearchTerm]);
 
-  players.data.forEach(player => player.team_name = player.team.full_name);
+  players.data.list.forEach(player => player.team_name = player.team.full_name);
 
   const onSearchSubmit = (event: React.ChangeEvent<HTMLFormElement>) => {
+    players.data.page = 1;
     handleFetchTeams();
     event.preventDefault();
+  }
+
+  const loadMoreResults = () => {
+    players.data.page += 1;
+    handleFetchTeams();
   }
 
   return (
@@ -130,11 +165,15 @@ function App() {
         placeholder="First or Last name"
       ></SearchForm>
       <Table 
-        list={players.data} 
+        list={players.data.list} 
         columns={searchTableColumns} 
         tableKey='searchTable'>
           {!players.isSearched ? 'Search Table to Begin Search' : 'No results found...'}
       </Table>
+      {
+        players.data.total_pages > 0 && players.data.page < players.data.total_pages ?
+        <Button variant="success" onClick={loadMoreResults}>Load More</Button> : null
+      }
     </div>
   );
 }
