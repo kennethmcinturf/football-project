@@ -1,10 +1,8 @@
-import 'bootstrap/dist/css/bootstrap.min.css';
-
 import React from 'react';
 import axios from "axios";
+import findIndex from 'lodash/findIndex';
 import Table from './Table/Table';
 import SearchForm from './SearchForm/SearchForm';
-import Button from 'react-bootstrap/Button';
 
 const TEAM_API = 'https://www.balldontlie.io/api/v1/players?search=';
 const API_PAGE = '&page='
@@ -20,15 +18,16 @@ type Team = {
 };
 
 type Player = {
-  'id': number;
-  'first_name': string;
-  'last_name': string;
-  'position': string;
-  'height_feet': number;
-  'height_inches' : number;
-  'weight' : number;
-  'team' : Team;
-  'team_name' : string;
+  id : number;
+  first_name : string;
+  last_name : string;
+  position : string;
+  height_feet : number;
+  height_inches : number;
+  weight : number;
+  team : Team;
+  team_name : string;
+  isChosen : boolean;
 };
 
 type Players = Array<Player>;
@@ -96,6 +95,7 @@ const playersReducer = (state: PlayersState, action: PlayersAction) => {
 
 function App() {
   const [searchTerm, setSearchTerm] = React.useState<string>('');
+  const [chosenPlayers, setChosenPlayers] = React.useState<Players>([]);
   const [players, dispatchPlayers] = React.useReducer(playersReducer, 
     {data: {
       list: [],
@@ -116,11 +116,25 @@ function App() {
     return url;
   }
 
+  const setUpPlayers = (data : Players) => {
+    data.forEach(player => {
+      player.team_name = player.team.full_name;
+
+      let index = findIndex(chosenPlayers, {id:player.id});
+      if (index > -1) {
+        player.isChosen = true;
+      }
+    });
+  }
+
   const handleFetchTeams = React.useCallback(async () => {
     dispatchPlayers({ type: "PLAYERS_FETCH_INIT" });
 
     try {
       const results = await axios.get(buildUrl());
+
+      setUpPlayers(results.data.data);
+
       dispatchPlayers({
         type: "PLAYERS_FETCH_SUCCESS", 
         payload: {
@@ -139,8 +153,6 @@ function App() {
       setSearchTerm(event.target.value);
   },[setSearchTerm]);
 
-  players.data.list.forEach(player => player.team_name = player.team.full_name);
-
   const onSearchSubmit = (event: React.ChangeEvent<HTMLFormElement>) => {
     players.data.page = 1;
     handleFetchTeams();
@@ -150,6 +162,17 @@ function App() {
   const loadMoreResults = () => {
     players.data.page += 1;
     handleFetchTeams();
+  }
+
+  function handleAddButton(player : Player) {
+    player.isChosen = !player.isChosen;
+
+    if (player.isChosen == true) {
+      setChosenPlayers(chosenPlayers.concat(player));
+    } else {
+      var index = findIndex(chosenPlayers, player);
+      setChosenPlayers(chosenPlayers.splice(index, 1));
+    }
   }
 
   return (
@@ -167,13 +190,13 @@ function App() {
       <Table 
         list={players.data.list} 
         columns={searchTableColumns} 
-        tableKey='searchTable'>
+        tableKey='searchTable'
+        buttonAction={handleAddButton}
+        total_pages={players.data.total_pages}
+        page={players.data.page}
+        loadHandler={loadMoreResults}>
           {!players.isSearched ? 'Search Table to Begin Search' : 'No results found...'}
       </Table>
-      {
-        players.data.total_pages > 0 && players.data.page < players.data.total_pages ?
-        <Button variant="success" onClick={loadMoreResults}>Load More</Button> : null
-      }
     </div>
   );
 }
@@ -182,7 +205,11 @@ type TableProps = {
   list:Players,
   columns:Array<any>,
   tableKey: string,
-  children: React.ReactNode
+  children: React.ReactNode,
+  buttonAction?: Function,
+  page?: number,
+  total_pages?: number,
+  loadHandler?: Function
 };
 
 type SearchFormProps = {
@@ -196,4 +223,4 @@ type SearchFormProps = {
 
 export default App;
 
-export type { TableProps, SearchFormProps, Player };
+export type { TableProps, SearchFormProps, Player, Players };
